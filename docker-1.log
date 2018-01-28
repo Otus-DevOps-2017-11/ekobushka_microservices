@@ -1,0 +1,7 @@
+REPOSITORY                  TAG                 IMAGE ID            CREATED             SIZE
+ekobushka/ubuntu-tmp-file   latest              073267cbd155        52 seconds ago      112MB
+ubuntu                      16.04               0458a4468cbc        2 days ago          112MB
+elasticsearch               2                   705cb8c5336c        2 months ago        574MB
+mongo                       3                   d22888af0ce0        2 months ago        361MB
+hello-world                 latest              48b5124b2768        12 months ago       1.84kB
+graylog2/server             2.1.1-1             58a2b309b960        16 months ago       619MB
