@@ -1,8 +1,81 @@
-# DevOps Homework-14 by Eugeny Kobushka
+# DevOps Homework-15 by Eugeny Kobushka
 
+## **Задание:** Выполнить последовательность действий из методического пособия
+
+### **Выполнение**
+
+1. Создаем проект docker-ID и переинициализируем GCP для работы с новым проектом
+```bash
+gcloud init
+```
+2. Получаем файл аутентификации для docker-machine
+```bash
+gcloud auth application-default login
+```
+3. Создаем docker-host и проверяем что все успешно создано
+```bash
+
+# Создадим докер-хост
+docker-machine create --driver google --google-project docker-193604 --google-zone europe-west1-b  --google-machine-type g1-small --google-machine-image $(gcloud compute images list --filter ubuntu-1604-lts --uri) docker-host
+
+# Проверим его работу
+docker-machine ls
+
+``` 
+4. Создаем файлы нашего репозитория:
+  * Dockerfile
+  * mongod.conf
+  * db_conf
+  * start.sh
+
+5. Сборка образа
+```bash
+
+# Собираем образ
+docker build -t reddit:latest .
+
+# Проверяем результат
+docker images -a
+
+```
+6. Запускаем контейнер
+```bash
+
+docker run --name reddit -d --network=host reddit:latest
+
+# Убедимся что без нужного правила файрвола не работает - открываем полученный IP в браузере
+
+```
+7. Разрешаем входящий TCP-трафик на порт 9292 выполнив команду:
+```bash
+
+gcloud compute firewall-rules create reddit-app  --allow tcp:9292 --priority=65534  --target-tags=docker-machine  --description="Allow TCP connections"  --direction=INGRESS
+
+# проверяем наш сервис - все открываемся
+
+```
+9. Docker-hub
+* Проходим регистрацию (если нет)
+* Загрузим наш образ на docker hub
+```bash
+
+# регистрация
+docker login
+
+# Push image
+docker tag reddit:latest ekobushka/otus-reddit:1.0
+docker push ekobushka/otus-reddit:1.0
+
+```
+
+<br><br>
+
+# DevOps Homework-14 by Eugeny Kobushka (выполнено)
+
+<details><br>
 
 ## **Задание:** Выполнить все шаги по методичке...
-
+<details><br>
 ### 1. Устанавливаем docker на Ubuntu Linux:
 
 Описание установки есть на страничке:<br>
@@ -37,8 +110,11 @@ docker-compose --version
 curl -L https://github.com/docker/machine/releases/download/v0.13.0/docker-machine-`uname -s`-`uname -m` >/tmp/docker-machine && chmod +x /tmp/docker-machine && sudo cp /tmp/docker-machine /usr/local/bin/docker-machine
 docker-machine version
 ```
+</details>
 
 ### 2. Проверяем что каждый раз создается новый контейнер
+<details>
+
 ```bash
 docker run -it ubuntu:16.04 /bin/bash
 root@95580ac35bf0:/# echo "Hello world!" > /tmp/hello.txt
@@ -51,7 +127,11 @@ cat: /tmp/hello.txt: No such file or directory
 root@91105c4abc99:/# exit
 exit
 ```
+</details>
+
 ### 3. Cмотрим ранее созданные контейнеры
+<details>
+
 ```bash
 docker ps -a --format "table {{.ID}}\t{{.Image}}\t{{.CreatedAt}}\t{{.Names}}"
 CONTAINER ID        IMAGE               CREATED AT                      NAMES
@@ -59,22 +139,31 @@ CONTAINER ID        IMAGE               CREATED AT                      NAMES
 95580ac35bf0        ubuntu:16.04        2018-01-28 20:24:02 +0300 MSK   boring_ardinghelli
 cf69e430aae6        hello-world         2018-01-28 20:11:41 +0300 MSK   laughing_liskov
 ```
+</details>
 
 ### 4. Запуск существующего контейнера и подсключение к нему
+<details>
 ```bash
 sudo docker start 95580ac35bf0
 sudo docker attach 95580ac35bf0
 root@95580ac35bf0:/# cat /tmp/hello.txt 
 Hello world!
+</details>
 
 # оставим контейнер работать и выйдем из него
+<details>
+
 Ctrl+p, Ctrl+q
 
 sudo docker ps
 CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
 95580ac35bf0        ubuntu:16.04        "/bin/bash"         8 minutes ago       Up About a minute                       boring_ardinghelli
 
+</details>
+
 # Подключаемся к существующему контейнеру
+<details>
+
 sudo docker start 95580ac35bf0
 sudo docker attach 95580ac35bf0
 <ENTER>
@@ -95,14 +184,19 @@ mongo                       3                   d22888af0ce0        2 months ago
 hello-world                 latest              48b5124b2768        12 months ago       1.84kB
 graylog2/server             2.1.1-1             58a2b309b960        16 months ago       619MB
 ```
+</details>
 
 ### 6. После всего этого остановим работающий контейнер, командой
+<details>
 ```bash
 sudo docker kill $(sudo docker ps -q)
 95580ac35bf0
 ```
+</details>
 
 ### 7. Просмотрим занятое место образами, контейнерами и разделами
+<details>
+
 ```bash
 sudo docker system df
 TYPE                TOTAL               ACTIVE              SIZE                RECLAIMABLE
@@ -111,8 +205,9 @@ Containers          4                   0                   166B                
 Local Volumes       2                   0                   32.71kB             32.71kB (100%)
 Build Cache                                                 0B                  0B
 ```
-
 ### 8. Удалим все неиспользуемые и не запущенные контейнеры
+<details>
+
 ```bash
 sudo docker rm $(sudo docker ps -a -q)
 288db9f165a6
@@ -120,8 +215,11 @@ sudo docker rm $(sudo docker ps -a -q)
 95580ac35bf0
 cf69e430aae6
 ```
+</details>
 
 ### 9. Удалим все образы от которых не зависят запущенные контейнеры
+<details>
+
 ```bash
 sudo docker rmi $(sudo docker images -q)     
 Untagged: ekobushka/ubuntu-tmp-file:latest
@@ -139,5 +237,6 @@ Deleted: sha256:ff986b10a018b48074e6d3a68b39aad8ccc002cdad912d4148c0f92b3729323e
 <весь вывод не привожу... он длинный, т.к. в списке были контейнеры не по заданию>
 
 ```
+</details>
 
 ### В лог файл **docker-1.log** добавлены выводы для задания со *
