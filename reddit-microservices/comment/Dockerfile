@@ -1,9 +1,10 @@
 FROM ruby:2.2
 
-RUN apt-get update -qq && apt-get install -y build-essential
+RUN apt-get update -qq && apt-get install --no-install-recommends -y build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV APP_HOME /app
-RUN mkdir $APP_HOME
+RUN mkdir "$APP_HOME"
 WORKDIR $APP_HOME
 
 # ADD Gemfile* $APP_HOME/
