@@ -1,5 +1,216 @@
-# Выполнение домашней работы
+# DevOps Homework-16 by Eugeny Kobushka
+
+## Оглавление документации домашних работ
 
 1. [Домашняя работа № 14](docs/hw-14.md)
 2. [Домашняя работа № 15](docs/hw-15.md)
 3. [Домашняя работа № 16](docs/hw-16.md)
+
+## **Задание:** Выполнить все шаги по методичке
+
+1. Готовим наш репозиторий к выполненияю домашнего задания
+2. Собираем старые наработки в каталог monolith
+3. Качаем архив и распаковываем его в каталог reddit-microservices
+
+### **Создаем Dockerfile**
+
+Так как предложенные Dockerfile не оптимизированы, то при создании учтем этот момент.
+Что изменится в предложенных файлах
+
+#### post-py/Dockerfile
+
+Уберем первую инструкцию RUN, так как эта команда полностью дублирует идущую ниже команду RUN. В файле requirements.txt уже указаны нужные нам пакеты.
+
+```dockerfile
+# RUN pip install flask pymongo
+```
+
+команду ADD использовать не рекомендуется, поэтому заменим ADD на COPY.
+
+```dockerfile
+# ADD . /app
+COPY . /app
+
+```
+
+Заменил тег версии python c **python:3.6.0-alpine** на **python:alpine3.6** иначе при сборке были ошибки на недоступность нужной версии.
+Нужный тег смотрел вот здесь - <https://docs.docker.com/samples/library/python/>
+
+#### comment/Dockerfile и ui/Dockerfile
+
+Эти два компонента можно объединить в один пункт, так как у них одни и те же неоптимизированные строки. Команда ADD использована как дублирующая команду COPY и ее можно совесм убрать. Команду COPY передвинем на место убранной команды ADD.
+
+```dockerfile
+# ADD Gemfile* $APP_HOME/
+COPY . $APP_HOME
+RUN bundle install
+```
+
+### **Проверка линтером Dockerfile**
+
+Устранил все найденные недостатки линтером, кроме одной, рекомендации использовать вместо просто имени пакета для установки версию пакета.
+
+### Собираем приложение
+
+Перед сборкой нашего приложения нужно проверить что машина для нашего приложения запущена. Если не запущена, то нужно ее запустить командой из предыдущей домашней работы.
+
+```bash
+docker build -t ekobushka/post:1.0 ./post-py
+docker build -t ekobushka/comment:1.0 ./comment
+docker build -t ekobushka/ui:1.0 ./ui
+```
+
+Cборка ui началась не с первого шага потому что были в кеше созданные слои для образа.
+
+### **Запускаем наше приложение**
+
+```bash
+docker network create reddit
+docker run -d --network=reddit --network-alias=post_db --network-alias=comment_db mongo:latest
+docker run -d --network=reddit --network-alias=post ekobushka/post:1.0
+docker run -d --network=reddit --network-alias=comment ekobushka/comment:1.0
+docker run -d --network=reddit -p 9292:9292 ekobushka/ui:1.0
+```
+
+Проверяем работу нашего приложения - все работает...
+
+## **Задание со (*)**
+
+Запустить наше приложение с помощью передачи других сетевых аллиасов при запуске. Для этого нужно передать нужные переменные окружения через опцию **-e**
+
+```bash
+docker run -d --network=reddit \
+              --network-alias=reddit_post_db \
+              --network-alias=reddit_comment_db mongo:latest
+docker run -d --network=reddit \
+              --network-alias=reddit_post \
+              -e POST_DATABASE_HOST=reddit_post_db ekobushka/post:1.0
+docker run -d --network=reddit \
+              --network-alias=reddit_comment \
+              -e COMMENT_DATABASE_HOST=reddit_comment_db ekobushka/comment:1.0
+docker run -d --network=reddit -p 9292:9292 \
+              --network-alias=reddit_ui \
+              -e COMMENT_SERVICE_HOST=reddit_comment -e POST_SERVICE_HOST=reddit_post ekobushka/ui:1.0
+```
+
+Проверяем работу нашего приложения - все работает...
+
+## **Размер образов**
+
+Посмотрим сколько места занимают образа нашего приложения
+
+```bash
+docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+ekobushka/ui        1.0                 ab6cd663d5e1        About an hour ago   778 MB
+ekobushka/comment   1.0                 7f740c96f109        About an hour ago   771 MB
+ekobushka/post      1.0                 f7e823021e2c        About an hour ago   97 MB
+ruby                2.2                 b6a12a98a682        6 days ago          719 MB
+mongo               latest              0f57644645eb        4 weeks ago         366 MB
+python              alpine3.6           78d64a211a65        4 weeks ago         83.8 MB
+```
+
+Изменим ui/Dockerfile на предложенный вариант. Подправил на более оптимизированный вариант. Проверил линтером и учел все рекомендации.
+
+Собираем образ ui:2.0 и проверяем объем образа
+
+```bash
+docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+ekobushka/ui        2.0                 b536e698a643        2 minutes ago       393 MB
+ekobushka/ui        1.0                 ab6cd663d5e1        3 hours ago         778 MB
+```
+
+Как видим разница почти в два раза получилась.
+
+## **Задание со (*) Попробуйте собрать образ на основе Alpine Linux**
+
+Соберем образ на основе Alpine Linux и проверим объем
+
+```docker
+docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED              SIZE
+ekobushka/ui        3.0                 1853c4e3597c        About a minute ago   40.4 MB
+ekobushka/ui        2.0                 b536e698a643        31 minutes ago       393 MB
+ekobushka/ui        1.0                 ab6cd663d5e1        3 hours ago          778 MB
+```
+
+## **Создадим docker volume и подключим к контейнеру с БД**
+
+```bash
+docker volume create reddit_db \
+&& docker run -d --network=reddit --network-alias=reddit_post_db --network-alias=reddit_comment_db -v reddit_db:/data/db mongo:latest \
+&& docker run -d --network=reddit --network-alias=reddit_post -e POST_DATABASE_HOST=reddit_post_db ekobushka/post:1.0 \
+&& docker run -d --network=reddit --network-alias=reddit_comment -e COMMENT_DATABASE_HOST=reddit_comment_db ekobushka/comment:1.0 \
+&& docker run -d --network=reddit -p 9292:9292 --network-alias=reddit_ui -e COMMENT_SERVICE_HOST=reddit_comment -e POST_SERVICE_HOST=reddit_post ekobushka/ui:3.0
+```
+
+Проверяем работу приложения - все работает...
+
+## **Способы уменьшения образов на примере образа UI**
+
+Почитал различные рекомендации по оптимизации и уменьшению образов. Что проверил?
+
+* Использовать минимальный базовый образ
+* Уменьшить количества слоев
+* Удалить весь мусор (временные файлы, кеш, архивы и т.д.)
+* Не устанавливать лишних утилит и пакетов в контейнер
+* По возможности не стоит копировать свои исходники в контейнер (как вариант использовать volume)
+* Указанное выше справедливо и для файлов баз данных и конфигов
+* Использовать .dockerignore чтобы не копирвоать лишние файлы в контейнер
+
+Конфигов для работы приложения пока не видно, а саму БД мы вынесли на volume.
+Количество слоев уменьшили. Использовали в качестве базового образа Alpine.
+Лишних утилит и паектов не ставили. Мусор весь удалили.
+
+Закомичен Dockerfile с изменениями для оптимизации и уменьшения размера образа.
+
+Оставил комментарии старых вариантов, для памяти, чтобы не плодить лишних файлов.
+
+<br>
+
+### **Узелок на память по используемым коммандам**
+
+<details>
+
+```bash
+# Создаем хост docker-machine
+docker-machine create --driver google \
+                      --google-project docker-193604 \
+                      --google-zone europe-west1-b  \
+                      --google-machine-type g1-small \
+                      --google-machine-image $(gcloud compute images list --filter ubuntu-1604-lts --uri) \
+                      docker-host
+# Назначаем хост для работы по кмолчанию
+eval "$(docker-machine env docker-host)"
+
+# Собираем docker-контейнеры
+docker pull mongo:latest
+docker build -t ekobushka/post:1.0 ./post-py
+docker build -t ekobushka/comment:1.0 ./comment && docker build -t ekobushka/ui:1.0 ./ui
+
+# netework
+docker network create reddit
+
+# volume
+docker volume create reddit_db
+
+# Запускаем docker-контейнеры
+docker run -d --network=reddit --network-alias=reddit_post_db --network-alias=reddit_comment_db -v reddit_db:/data/db mongo:latest
+docker run -d --network=reddit --network-alias=reddit_post -e POST_DATABASE_HOST=reddit_post_db ekobushka/post:1.0
+docker run -d --network=reddit --network-alias=reddit_comment -e COMMENT_DATABASE_HOST=reddit_comment_db ekobushka/comment:1.0 && docker run -d --network=reddit -p 9292:9292 --network-alias=reddit_ui -e COMMENT_SERVICE_HOST=reddit_comment -e POST_SERVICE_HOST=reddit_post ekobushka/ui:1.0
+
+# Смотрим IP-адрес нашего хоста
+docker-machine ls
+
+# И все указанное выше одной коммандой для тестов
+docker-machine create --driver google --google-project docker-193604 --google-zone europe-west1-b --google-machine-type g1-small --google-machine-image $(gcloud compute images list --filter ubuntu-1604-lts --uri) docker-host && eval "$(docker-machine env docker-host)" && docker pull mongo:latest && docker build -t ekobushka/post:1.0 ./post-py && docker build -t ekobushka/comment:1.0 ./comment && docker build -t ekobushka/ui:1.0 ./ui && docker network create reddit && docker volume create reddit_db && docker run -d --network=reddit --network-alias=reddit_post_db --network-alias=reddit_comment_db -v reddit_db:/data/db mongo:latest && docker run -d --network=reddit --network-alias=reddit_post -e POST_DATABASE_HOST=reddit_post_db ekobushka/post:1.0 && docker run -d --network=reddit --network-alias=reddit_comment -e COMMENT_DATABASE_HOST=reddit_comment_db ekobushka/comment:1.0 && docker run -d --network=reddit -p 9292:9292 --network-alias=reddit_ui -e COMMENT_SERVICE_HOST=reddit_comment -e POST_SERVICE_HOST=reddit_post ekobushka/ui:1.0 && docker-machine ls
+
+# Удаляем все созданные контейнеры
+docker kill $(docker ps -q)
+
+# Удаляем созданный хост
+docker-machine rm docker-host
+
+```
+</details>
